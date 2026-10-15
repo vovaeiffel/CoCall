@@ -1,0 +1,2013 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CoCall</title>
+    <style>
+        :root {
+            --bg: #151829;
+            --panel: #1d2136;
+            --panel-2: #262b46;
+            --line: #323862;
+            --text: #e9ebfa;
+            --muted: #9ba1c9;
+            --accent: #7b86ff;
+            --accent-hover: #9099ff;
+            --good: #54d6a4;
+            --bad: #ff6f7f;
+            --radius: 12px;
+            /* Остальные цвета тоже в переменных, чтобы работала смена цветовой схемы (src/theme.ts) */
+            --accent-rgb: 123, 134, 255;
+            --text-rgb: 233, 235, 250;
+            --good-rgb: 84, 214, 164;
+            --bad-rgb: 255, 111, 127;
+            --warn-rgb: 242, 167, 78;
+            --on-accent: #10122a;
+            --on-good: #0c2a20;
+            --on-bad: #2b0b11;
+            --good-hover: #6fe3b6;
+            --bad-hover: #ff8a97;
+            --warn: #f2a74e;
+            --warn-text: #f2c98a;
+            --hover: #313761;
+            --placeholder: #6a7099;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        #update-banner {
+            display: none;
+            flex: none;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 16px;
+            background: linear-gradient(90deg, #4650c8, #6a54d6);
+            color: #fff;
+            font-size: 13px;
+        }
+        #update-banner.show { display: flex; }
+        #update-banner .msg { flex: 1; }
+        #update-banner button {
+            border: 0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        #update-banner #update-open { background: #fff; color: #3a43b0; }
+        #update-banner #update-close { background: transparent; color: #fff; opacity: 0.8; padding: 4px 8px; }
+        #update-banner #update-close:hover { opacity: 1; }
+        #app-version { margin-top: 14px; text-align: center; font-size: 12px; color: var(--muted, #8a90b0); user-select: text; }
+
+        /* ---------- Трансляция экрана ---------- */
+        .control-btn.sharing {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.25);
+        }
+
+        .control-btn.sharing:hover {
+            background: var(--accent-hover);
+        }
+
+        .control-btn.busy {
+            opacity: 0.45;
+        }
+
+        #stream-stage {
+            display: none;
+            flex: 1 1 auto;
+            min-height: 0;
+            position: relative;
+            margin: 12px 16px 0;
+            background: #05060d;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        #stream-stage.show {
+            display: flex;
+        }
+
+        #stream-stage:fullscreen {
+            margin: 0;
+            border: 0;
+            border-radius: 0;
+        }
+
+        #stream-video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #05060d;
+        }
+
+        .stream-bar {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: linear-gradient(180deg, rgba(5, 6, 13, 0.85), rgba(5, 6, 13, 0));
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        #stream-stage:hover .stream-bar,
+        #stream-stage:focus-within .stream-bar {
+            opacity: 1;
+        }
+
+        .stream-bar .stream-title {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+
+        .stream-bar input[type="range"] {
+            width: 90px;
+            accent-color: var(--accent);
+        }
+
+        .stream-bar .chat-tool {
+            color: #fff;
+        }
+
+        .room-main.has-stream .participants-list {
+            flex: none;
+            max-height: 128px;
+            padding: 10px 16px;
+            grid-auto-flow: column;
+            grid-template-columns: none;
+            grid-auto-columns: 124px;
+            grid-template-rows: auto;
+            overflow-x: auto;
+            overflow-y: hidden;
+            gap: 10px;
+        }
+
+        .room-main.has-stream .participant {
+            padding: 8px 6px 8px;
+        }
+
+        .room-main.has-stream .participant-avatar {
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+            margin-bottom: 6px;
+        }
+
+        #reconnect-bar {
+            display: none;
+            padding: 10px 20px;
+            background: rgba(var(--warn-rgb), 0.16);
+            border-bottom: 1px solid rgba(var(--warn-rgb), 0.45);
+            color: var(--warn-text);
+            font-size: 13px;
+        }
+        #reconnect-bar.show { display: block; }
+
+        #sharing-bar {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: rgba(var(--accent-rgb), 0.14);
+            border-top: 1px solid var(--line);
+            font-size: 13px;
+        }
+
+        #sharing-bar.show {
+            display: flex;
+        }
+
+        #sharing-bar .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--bad);
+            animation: pulse 1.6s infinite;
+        }
+
+        @keyframes pulse {
+            50% { opacity: 0.35; }
+        }
+
+        #sharing-bar .grow {
+            flex: 1;
+        }
+
+        .seg {
+            display: inline-flex;
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+
+        .seg button {
+            border: 0;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 13px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .seg button:hover {
+            color: var(--text);
+        }
+
+        .seg button.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        #screen-modal .modal-content {
+            width: 640px;
+        }
+
+        .source-title {
+            color: var(--muted);
+            font-size: 12px;
+            margin: 4px 0 8px;
+        }
+
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 2px;
+        }
+
+        .source-card {
+            background: var(--panel-2);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 6px;
+            cursor: pointer;
+            color: var(--text);
+            font: inherit;
+            text-align: left;
+        }
+
+        .source-card:hover {
+            border-color: var(--line);
+        }
+
+        .source-card.selected {
+            border-color: var(--accent);
+        }
+
+        .source-card img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #05060d;
+        }
+
+        .source-card span {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
+        #toast {
+            position: fixed;
+            left: 50%;
+            bottom: 90px;
+            transform: translateX(-50%);
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            padding: 10px 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            font-size: 13px;
+            z-index: 300;
+            display: none;
+            max-width: calc(100vw - 32px);
+        }
+
+        #toast.show {
+            display: block;
+        }
+
+        #stream-invite {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            margin: 12px 16px 0;
+            padding: 10px 14px;
+            background: rgba(var(--accent-rgb), 0.14);
+            border: 1px solid rgba(var(--accent-rgb), 0.4);
+            border-radius: var(--radius);
+            font-size: 14px;
+        }
+
+        #stream-invite.show {
+            display: flex;
+        }
+
+        #stream-invite .grow {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #stream-wait {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: var(--muted);
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        #stream-stage.loading #stream-wait {
+            display: flex;
+        }
+
+        .room-main {
+            position: relative;
+        }
+
+        #share-preview {
+            display: none;
+            position: absolute;
+            right: 16px;
+            bottom: 150px;
+            width: 240px;
+            background: #05060d;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+            z-index: 5;
+        }
+
+        #share-preview.show {
+            display: block;
+        }
+
+        #share-preview video {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: contain;
+            background: #05060d;
+        }
+
+        #share-preview.collapsed video {
+            display: none;
+        }
+
+        #share-preview .cap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            font-size: 12px;
+            background: var(--panel-2);
+        }
+
+        #share-preview .cap span {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #share-preview .cap button {
+            border: 0;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            font: inherit;
+            font-size: 12px;
+        }
+
+        #share-preview .cap button:hover {
+            color: var(--text);
+        }
+
+        body {
+            font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+            font-size: 14px;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .icon {
+            display: block;
+            flex: none;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        /* ---------- Кнопки ---------- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 600;
+            color: var(--text);
+            transition: background 0.15s, transform 0.05s;
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--on-accent);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-success {
+            background: var(--good);
+            color: var(--on-good);
+            width: 100%;
+            padding: 12px;
+        }
+
+        .btn-success:hover {
+            background: var(--good-hover);
+        }
+
+        .btn-secondary {
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+        }
+
+        .btn-secondary:hover {
+            background: var(--hover);
+        }
+
+        /* ---------- Поля ввода ---------- */
+        .input-group {
+            width: 100%;
+            margin-bottom: 14px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            color: var(--text);
+            font: inherit;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            border-color: var(--accent);
+        }
+
+        ::placeholder {
+            color: var(--placeholder);
+        }
+
+        /* ---------- Главный экран ---------- */
+        #main-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 28px 32px 32px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .brand-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+        }
+
+        .brand h1 {
+            font-size: 26px;
+            font-weight: 650;
+            letter-spacing: -0.01em;
+            line-height: 1.1;
+        }
+
+        .brand p {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        #visible-group label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+        #visible-group input[type="checkbox"] { width: auto; flex: none; margin: 0; }
+
+        #diag-btn {
+            position: fixed; top: calc(14px + var(--banner-h, 0px)); right: 92px; z-index: 60;
+            display: flex; align-items: center; gap: 6px;
+            background: var(--panel); color: var(--text);
+            border: 1px solid var(--line); border-radius: 10px;
+            padding: 7px 11px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        #diag-btn:hover { background: var(--panel-2); }
+        #diag-modal .modal-content { width: 600px; }
+        #diag-list { max-height: 46vh; overflow-y: auto; margin: 4px 0 14px; }
+        .diag-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+        .diag-row:last-child { border-bottom: none; }
+        .diag-mark {
+            flex: none; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; background: var(--panel-2); color: var(--muted);
+        }
+        .diag-row.ok .diag-mark { background: rgba(var(--good-rgb), 0.2); color: var(--good); }
+        .diag-row.warn .diag-mark { background: rgba(var(--warn-rgb), 0.22); color: var(--warn); }
+        .diag-row.bad .diag-mark { background: rgba(var(--bad-rgb), 0.22); color: var(--bad); }
+        .diag-title { font-weight: 650; font-size: 14px; }
+        .diag-text { color: var(--muted); font-size: 13px; margin-top: 2px; white-space: pre-line; }
+        .diag-hints { margin: 6px 0 0 18px; padding: 0; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+        .diag-host-row { display: flex; gap: 8px; margin-bottom: 14px; }
+        .diag-host-row input { flex: 1; padding: 9px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; font: inherit; outline: none; }
+        #diag-modal h2 { display: flex; align-items: center; gap: 10px; }
+
+        #lang-switch { position: fixed; top: calc(14px + var(--banner-h, 0px)); right: 18px; z-index: 60; }
+        #lang-btn {
+            display: flex; align-items: center; gap: 6px;
+            background: var(--panel); color: var(--text);
+            border: 1px solid var(--line); border-radius: 10px;
+            padding: 7px 11px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        #lang-btn:hover { background: var(--panel-2); }
+        #lang-menu {
+            display: none; position: absolute; right: 0; top: 40px; min-width: 150px;
+            background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+            padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+        }
+        #lang-menu.show { display: block; }
+        .lang-item {
+            display: block; width: 100%; text-align: left; background: transparent; color: var(--text);
+            border: 0; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; cursor: pointer;
+        }
+        .lang-item:hover { background: var(--panel-2); }
+        .lang-item.current { color: var(--accent, #8a93ff); font-weight: 650; }
+
+        .main-wrap {
+            width: 100%;
+            max-width: 820px;
+        }
+
+        /* ---------- Цветовая схема (Настройки → Общее) ---------- */
+        #theme-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+        .theme-card {
+            display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px;
+            background: var(--panel-2); color: var(--text); border: 1.5px solid var(--line); border-radius: 10px;
+            font: inherit; font-size: 12.5px; cursor: pointer;
+        }
+        .theme-card:hover { background: var(--hover); }
+        .theme-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.3); }
+        .theme-swatch {
+            position: relative; display: block; width: 100%; height: 34px; border-radius: 7px; border: 1px solid;
+        }
+        .theme-swatch i { position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px; border-radius: 50%; }
+        #theme-custom { margin-top: 10px; }
+        .theme-color-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; font-size: 13px; }
+        .theme-color-row input[type="color"] { width: 54px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; flex: none; }
+
+        /* ---------- Чат сети (главный экран, справа) ---------- */
+        .main-body { display: flex; gap: 20px; width: 100%; max-width: 1190px; align-items: flex-start; justify-content: center; }
+        .main-body .main-wrap { flex: 1 1 auto; min-width: 0; }
+        #lobby-panel {
+            width: 330px; flex: none; display: flex; flex-direction: column;
+            height: calc(100vh - 150px - var(--banner-h, 0px)); min-height: 380px; max-height: 660px;
+            position: sticky; top: 0;
+            background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+            overflow: hidden;
+        }
+        #lobby-panel .chat-title { justify-content: space-between; }
+        #lobby-online { font-size: 12px; font-weight: 500; color: var(--muted); cursor: default; }
+        .lobby-note { padding: 8px 16px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); line-height: 1.4; }
+        #lobby-messages { flex: 1; overflow-y: auto; padding: 12px 16px; user-select: text; min-height: 0; }
+        #lobby-status { min-height: 16px; padding: 0 16px; font-size: 12px; color: var(--warn); }
+        .lobby-compose { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); align-items: flex-end; }
+        .lobby-compose textarea {
+            flex: 1; resize: none; height: 40px; max-height: 96px; padding: 9px 10px;
+            background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+            font: inherit; font-size: 13.5px; outline: none;
+        }
+        .lobby-compose textarea:focus { border-color: var(--accent); }
+        .lobby-compose textarea:disabled { opacity: 0.55; }
+        .lobby-compose .btn { padding: 9px 14px; }
+        @media (max-width: 1050px) {
+            .main-body { flex-direction: column; align-items: center; }
+            .main-body .main-wrap { width: 100%; max-width: 820px; flex: none; }
+            #lobby-panel { width: 100%; max-width: 820px; height: 380px; min-height: 0; position: static; }
+        }
+
+        .name-row {
+            max-width: 360px;
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .profile-row { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 18px; }
+        .profile-row #my-avatar-preview { cursor: pointer; margin-bottom: 0; width: 52px; height: 52px; }
+        .profile-row #my-avatar-preview:hover { filter: brightness(1.15); }
+        .avatar-actions { display: flex; gap: 8px; }
+
+        .cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card h2 {
+            font-size: 17px;
+            font-weight: 650;
+            margin-bottom: 4px;
+        }
+
+        .card-hint {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 16px;
+            line-height: 1.45;
+        }
+
+        .card .spacer {
+            flex: 1;
+        }
+
+        .address-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .address-value {
+            flex: 1;
+            color: var(--text);
+            font-family: 'Cascadia Mono', Consolas, monospace;
+            font-size: 13px;
+            padding: 9px 12px;
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            user-select: text;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .address-group {
+            margin-bottom: 16px;
+        }
+
+        .address-group .caption {
+            font-size: 12px;
+            color: var(--muted);
+            margin: 10px 0 6px;
+        }
+
+        .room-list {
+            width: 100%;
+            margin-top: 16px;
+            /* много комнат — список прокручивается внутри, а не растягивает всю страницу */
+            max-height: max(110px, calc(100vh - 640px - var(--banner-h, 0px)));
+            overflow-y: auto;
+        }
+
+        .room-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+        }
+
+        .room-info h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .room-info p {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .room-list-title {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 4px 2px 8px;
+        }
+
+        .room-item {
+            gap: 12px;
+        }
+
+        .room-item.mine {
+            border-color: rgba(var(--good-rgb), 0.5);
+            background: rgba(var(--good-rgb), 0.08);
+        }
+
+        .room-item .room-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .room-item .room-info h3 .name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .room-item .room-info p {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: var(--muted);
+        }
+
+        .status-dot.online { background: var(--good); }
+        .status-dot.closed { background: var(--warn); }
+        .status-dot.offline { background: var(--bad); }
+
+        .room-actions {
+            display: flex;
+            gap: 8px;
+            flex: none;
+        }
+
+        .room-actions .btn {
+            padding: 8px 14px;
+        }
+
+        .room-actions .btn.small {
+            padding: 8px 10px;
+            line-height: 1;
+        }
+
+        .room-empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 18px;
+            border: 1px dashed var(--line);
+            border-radius: var(--radius);
+        }
+
+        /* ---------- Экран комнаты ---------- */
+        #room-screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+            position: relative;
+        }
+
+        #room-screen.active {
+            display: flex;
+        }
+
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .room-header h2 {
+            font-size: 18px;
+            font-weight: 650;
+        }
+
+        .icon-btn {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--panel-2);
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .icon-btn:hover {
+            background: var(--hover);
+        }
+
+        .icon-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--on-accent);
+        }
+
+        .badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--bad);
+            border: 2px solid var(--panel);
+            display: none;
+        }
+
+        .badge.show {
+            display: block;
+        }
+
+        .room-body {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+
+        .room-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .participants-list {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-auto-rows: min-content;
+            gap: 16px;
+            align-content: start;
+        }
+
+        .participant {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 18px 10px 14px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            cursor: context-menu;
+            transition: background 0.15s;
+        }
+
+        .participant:hover {
+            background: var(--panel-2);
+        }
+
+        .participant { position: relative; }
+        .participant:not(.pinned) { cursor: pointer; }
+        .pin-badge { position: absolute; top: 8px; left: 8px; line-height: 0; color: var(--accent); }
+        .participants-list.pinning { display: flex; flex-direction: column; gap: 12px; }
+        .pin-stage { flex: 1; min-height: 0; display: flex; }
+        .pin-stage .participant { flex: 1; min-width: 0; justify-content: center; }
+        .pin-stage .participant-avatar { width: 128px; height: 128px; font-size: 48px; margin-bottom: 14px; }
+        .pin-stage .cam-tile { flex: 1; width: 100%; min-height: 0; aspect-ratio: auto; }
+        .pin-stage .cam-tile video { object-fit: contain; background: #000; }
+        .pin-stage .participant-info { flex: none; }
+        .pin-strip { flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: 150px; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+        .pin-strip .participant { padding: 8px 6px; }
+        .pin-strip .participant-avatar { width: 44px; height: 44px; font-size: 18px; margin-bottom: 6px; }
+        /* Пока идёт показ экрана, закрепление не нужно: обёртки «растворяются», карточки идут общей лентой */
+        .room-main.has-stream .participants-list.pinning { display: grid; }
+        .room-main.has-stream .pin-stage, .room-main.has-stream .pin-strip { display: contents; }
+        .room-main.has-stream .pin-stage .participant { flex: none; justify-content: flex-start; }
+        .room-main.has-stream .pin-stage .participant-avatar { width: 40px; height: 40px; font-size: 18px; margin-bottom: 6px; }
+        .room-main.has-stream .pin-stage .cam-tile { flex: none; aspect-ratio: 16 / 9; }
+        .room-main.has-stream .pin-stage .cam-tile video { object-fit: cover; }
+        .participant-avatar.has-img { background: transparent; overflow: hidden; }
+        .participant-avatar.has-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+        .participant-avatar.small { width: 48px; height: 48px; font-size: 20px; margin-bottom: 0; flex: none; }
+        .avatar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+        .chat-ava {
+            width: 18px; height: 18px; border-radius: 50%; flex: none; align-self: center;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 650; color: #fff; overflow: hidden;
+        }
+        .chat-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .signal { position: absolute; top: 8px; right: 8px; line-height: 0; cursor: help; }
+        .signal svg .frame { fill: none; stroke: currentColor; stroke-width: 1.2; opacity: 0.55; }
+        .signal svg .frame-fill { fill: currentColor; opacity: 0.55; }
+        .signal svg .off { fill: currentColor; opacity: 0.15; }
+        .signal.q0 { color: #8a93a3; }
+        .signal.q1 { color: #ff6b6b; }
+        .signal.q2 { color: var(--warn); }
+        .signal.q3, .signal.q4 { color: var(--good); }
+        .signal svg .on { fill: currentColor; }
+        .room-main.has-stream .signal { top: 4px; right: 4px; }
+        .room-main.has-stream .signal svg { width: 16px; height: 8px; }
+
+        .participant-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 650;
+            color: #fff;
+            margin-bottom: 12px;
+            box-shadow: 0 0 0 3px var(--panel), 0 0 0 3px transparent, 0 0 0 transparent;
+            /* Плавное появление и затухание кольца вокруг говорящего */
+            transition: box-shadow 300ms ease;
+        }
+
+        .participant:hover .participant-avatar {
+            box-shadow: 0 0 0 3px var(--panel-2), 0 0 0 3px transparent, 0 0 0 transparent;
+        }
+
+        .participant.speaking .participant-avatar {
+            box-shadow: 0 0 0 3px var(--panel), 0 0 0 6px var(--good), 0 0 18px 4px rgba(var(--good-rgb), 0.4);
+        }
+
+        .participant-info {
+            width: 100%;
+        }
+
+        .participant-info h4 {
+            font-size: 15px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .participant-info p {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+        .participant-info p .icon {
+            color: var(--warn);
+        }
+
+        .room-controls {
+            display: flex;
+            gap: 12px;
+            padding: 14px 20px;
+            background: var(--panel);
+            border-top: 1px solid var(--line);
+            align-items: center;
+        }
+
+        .control-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, transform 0.05s;
+            flex: none;
+        }
+
+        .control-btn:active {
+            transform: scale(0.96);
+        }
+
+        .control-btn.mic-off {
+            background: rgba(var(--bad-rgb), 0.18);
+            color: var(--bad);
+            box-shadow: inset 0 0 0 1.5px rgba(var(--bad-rgb), 0.5);
+        }
+
+        .control-btn.mic-off:hover {
+            background: rgba(var(--bad-rgb), 0.28);
+        }
+
+        .control-btn.mic-on {
+            background: var(--good);
+            color: var(--on-good);
+        }
+
+        .control-btn.mic-on:hover {
+            background: var(--good-hover);
+        }
+
+        .control-btn.settings {
+            background: var(--panel-2);
+            color: var(--text);
+            box-shadow: inset 0 0 0 1px var(--line);
+        }
+
+        .control-btn.settings:hover {
+            background: var(--hover);
+        }
+
+        .control-btn.cam-on {
+            background: var(--good);
+            color: var(--on-good);
+            box-shadow: none;
+        }
+
+        .control-btn.cam-on:hover {
+            background: var(--good-hover);
+        }
+
+        /* Видео с камеры в карточке участника (вместо аватара) */
+        .cam-tile {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 10px;
+            box-shadow: 0 0 0 0 transparent;
+            transition: box-shadow 300ms ease;
+        }
+
+        .cam-tile video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .cam-tile.mirror video {
+            transform: scaleX(-1);
+        }
+
+        .participant.speaking .cam-tile {
+            box-shadow: 0 0 0 3px var(--good), 0 0 18px 4px rgba(var(--good-rgb), 0.4);
+        }
+
+        .participant.has-cam .participant-avatar {
+            display: none;
+        }
+
+        .room-main.has-stream .cam-tile {
+            margin-bottom: 6px;
+        }
+
+        .control-btn.leave {
+            background: var(--bad);
+            color: var(--on-bad);
+            margin-left: auto;
+            width: auto;
+            height: 44px;
+            padding: 0 20px;
+            border-radius: 22px;
+            font: inherit;
+            font-weight: 650;
+            gap: 8px;
+        }
+
+        .control-btn.leave:hover {
+            background: var(--bad-hover);
+        }
+
+        #visualizer-container {
+            width: 160px;
+            height: 36px;
+            margin-left: 8px;
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #visualizer-container canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* ---------- Чат ---------- */
+        #chat-panel {
+            width: 320px;
+            flex: none;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel);
+            border-left: 1px solid var(--line);
+            min-height: 0;
+        }
+
+        #chat-panel.hidden {
+            display: none;
+        }
+
+        .chat-title {
+            padding: 14px 16px;
+            font-weight: 650;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+            user-select: text;
+        }
+
+        .chat-empty {
+            color: var(--muted);
+            text-align: center;
+            padding: 24px 12px;
+            line-height: 1.5;
+        }
+
+        .chat-msg {
+            margin-top: 10px;
+        }
+
+        .chat-msg.cont {
+            margin-top: 2px;
+        }
+
+        .chat-msg .meta {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+
+        .chat-msg .who {
+            font-weight: 650;
+            font-size: 13px;
+        }
+
+        .chat-msg .time {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .chat-msg .text {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.4;
+        }
+
+        .chat-system {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .chat-compose {
+            position: relative;
+            border-top: 1px solid var(--line);
+        }
+
+        #chat-panel.dragover {
+            outline: 2px dashed var(--accent);
+            outline-offset: -6px;
+        }
+
+        #chat-attach-preview {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px 0;
+        }
+
+        #chat-attach-preview.show {
+            display: flex;
+        }
+
+        #chat-attach-preview img {
+            height: 56px;
+            max-width: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+        }
+
+        #chat-attach-preview span {
+            flex: 1;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        #chat-form {
+            display: flex;
+            gap: 6px;
+            padding: 12px;
+        }
+
+        .chat-tool {
+            width: 36px;
+            flex: none;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-tool:hover {
+            background: var(--panel-2);
+            color: var(--text);
+        }
+
+        #emoji-popup {
+            display: none;
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 100%;
+            margin-bottom: 6px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            padding: 8px;
+        }
+
+        #emoji-popup.show {
+            display: block;
+        }
+
+        .emoji-tabs {
+            display: flex;
+            gap: 4px;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .emoji-tab,
+        .emoji-item {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 8px;
+            font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+            line-height: 1;
+        }
+
+        .emoji-tab {
+            flex: 1;
+            padding: 6px 0;
+            font-size: 18px;
+            opacity: 0.6;
+        }
+
+        .emoji-tab.active {
+            opacity: 1;
+            background: var(--panel-2);
+        }
+
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            max-height: 190px;
+            overflow-y: auto;
+        }
+
+        .emoji-item {
+            font-size: 22px;
+            padding: 6px 0;
+        }
+
+        .emoji-item:hover,
+        .emoji-tab:hover {
+            background: var(--panel-2);
+        }
+
+        .chat-msg .pic {
+            display: block;
+            max-width: 100%;
+            max-height: 240px;
+            margin-top: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            cursor: zoom-in;
+        }
+
+        .file-card {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 4px; padding: 8px 10px; max-width: 100%;
+            background: rgba(var(--text-rgb),0.06); border: 1px solid rgba(var(--text-rgb),0.1);
+            border-radius: 10px;
+        }
+        .file-card.error { border-color: rgba(255,90,90,0.5); }
+        .file-card .file-ic { flex: none; color: var(--accent); display: flex; }
+        .file-card .file-info { min-width: 0; flex: 1; }
+        .file-card .file-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-card .file-status { font-size: 12px; opacity: 0.7; }
+        .file-card .file-warn { font-size: 11px; color: var(--warn); margin-top: 2px; }
+        .file-card .file-btn { flex: none; }
+        .chat-msg .gone {
+            color: var(--muted);
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        #lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 10, 22, 0.88);
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            cursor: zoom-out;
+        }
+
+        #lightbox.show {
+            display: flex;
+        }
+
+        #lightbox img {
+            max-width: 92vw;
+            max-height: 92vh;
+            border-radius: 12px;
+        }
+
+        #chat-input {
+            flex: 1;
+            min-width: 0;
+            padding: 10px 12px;
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            color: var(--text);
+            font: inherit;
+            outline: none;
+        }
+
+        #chat-input:focus {
+            border-color: var(--accent);
+        }
+
+        #chat-send {
+            width: 40px;
+            border: none;
+            border-radius: 10px;
+            background: var(--accent);
+            color: var(--on-accent);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #chat-send:hover {
+            background: var(--accent-hover);
+        }
+
+        /* ---------- Окна (модалки) ---------- */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 10, 22, 0.72);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        #error-hints { margin: 0 0 8px 18px; padding: 0; color: var(--text); font-size: 13px; line-height: 1.5; }
+        #error-hints li { margin-bottom: 6px; }
+        #error-modal h2 { color: var(--bad); }
+        input.flash { box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.6); transition: box-shadow 0.3s; }
+        .modal-content {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            padding: 24px;
+            border-radius: 16px;
+            width: 420px;
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 32px);
+            overflow-y: auto;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 18px;
+            font-size: 20px;
+            font-weight: 650;
+        }
+
+        .setting-item {
+            margin-bottom: 18px;
+        }
+
+        .setting-item label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .setting-item input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        .setting-item .value {
+            float: right;
+            color: var(--text);
+        }
+
+        .modal-content.settings-wide { width: 720px; }
+        .settings-layout { display: flex; gap: 18px; align-items: stretch; height: 440px; max-height: calc(100vh - 170px); }
+        .settings-nav { flex: none; width: 150px; display: flex; flex-direction: column; gap: 4px; }
+        .settings-nav button {
+            display: flex; align-items: center; gap: 8px; text-align: left;
+            background: transparent; color: var(--muted); border: none; border-radius: 10px;
+            padding: 10px 12px; font: inherit; font-weight: 600; cursor: pointer;
+        }
+        .settings-nav button:hover { background: var(--panel-2); color: var(--text); }
+        .settings-nav button.active { background: var(--panel-2); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
+        .settings-panes { flex: 1; min-width: 0; overflow-y: auto; padding-right: 6px; border-left: 1px solid var(--line); padding-left: 18px; }
+        .settings-pane { display: none; }
+        .settings-pane.active { display: block; }
+        .sound-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .sound-row:last-child { border-bottom: none; }
+        .sound-name { flex: 1; min-width: 0; font-size: 13px; }
+        .sound-name .hint { margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .settings-sub { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 12px; }
+        .settings-sub:not(:first-child) { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); }
+        @media (max-width: 640px) {
+            .settings-layout { flex-direction: column; height: auto; }
+            .settings-nav { flex-direction: row; width: auto; }
+            .settings-panes { border-left: none; padding-left: 0; max-height: 50vh; }
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        /* ---------- Контекстное меню ---------- */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 6px;
+            min-width: 200px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .context-menu.active {
+            display: block;
+        }
+
+        .context-menu-item {
+            padding: 9px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text);
+            transition: background 0.1s;
+        }
+
+        .context-menu-item:hover {
+            background: var(--panel-2);
+        }
+
+        .context-menu-item.danger {
+            color: var(--bad);
+        }
+
+        .context-menu-item.danger:hover {
+            background: rgba(var(--bad-rgb), 0.16);
+        }
+
+        .context-menu-divider {
+            height: 1px;
+            background: var(--line);
+            margin: 6px 4px;
+        }
+
+        .volume-slider-container {
+            padding: 8px 12px;
+        }
+
+        .volume-slider-container label {
+            color: var(--muted);
+            font-size: 12px;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .volume-slider-container input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        @media (max-width: 760px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            #chat-panel {
+                position: absolute;
+                top: 67px;
+                right: 0;
+                bottom: 0;
+                width: min(340px, 100%);
+                z-index: 5;
+                box-shadow: -12px 0 32px rgba(0, 0, 0, 0.4);
+            }
+
+            #visualizer-container {
+                display: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="update-banner" role="status">
+        <span class="msg" id="update-text"></span>
+        <button id="update-open" type="button">Скачать</button>
+        <button id="update-close" type="button" title="Скрыть" aria-label="Скрыть">✕</button>
+    </div>
+    <!-- ЭКРАН 1: главный (создание / подключение) -->
+    <div id="main-screen">
+        <button id="diag-btn" type="button" title="Диагностика"><span data-icon="activity" data-size="16"></span> Диагностика</button>
+        <div id="lang-switch">
+            <button id="lang-btn" type="button" aria-label="Язык интерфейса"></button>
+            <div id="lang-menu"></div>
+        </div>
+        <div class="brand">
+            <img src="build/icon.png" alt="" class="brand-logo">
+            <div>
+                <h1>CoCall</h1>
+                <p>Голосовой чат для своих</p>
+            </div>
+        </div>
+
+        <div class="main-body">
+        <div class="main-wrap">
+            <div class="profile-row">
+                <div id="my-avatar-preview" class="participant-avatar small" role="button" tabindex="0" title="Выбрать аватар"></div>
+                <div class="input-group name-row">
+                    <label>Ваше имя</label>
+                    <input type="text" id="username-input" placeholder="Как вас видят друзья" />
+                </div>
+                <div class="avatar-actions">
+                    <button class="btn btn-secondary small" id="avatar-pick" type="button">Аватар…</button>
+                    <button class="btn btn-secondary small" id="avatar-clear" type="button" style="display:none;">Убрать</button>
+                </div>
+                <input type="file" id="avatar-file" accept="image/*" hidden>
+            </div>
+            <div class="hint" id="avatar-error" style="color:var(--bad);margin:-6px 0 8px;"></div>
+
+            <div class="cards">
+                <div class="card">
+                    <h2>Подключиться</h2>
+                    <p class="card-hint">Введите адрес, который прислал друг.</p>
+                    <div class="input-group">
+                        <label>Адрес (IP:порт)</label>
+                        <input type="text" id="host-address-input" placeholder="Например: 192.168.1.42:8080" />
+                    </div>
+                    <div class="input-group">
+                        <label>Пароль комнаты (если есть)</label>
+                        <input type="password" id="join-password-input" maxlength="64" placeholder="Без пароля — оставьте пустым" autocomplete="off" />
+                    </div>
+                    <div class="spacer"></div>
+                    <button class="btn btn-primary" id="join-room-btn" style="width:100%; padding:12px;">
+                        <span data-icon="log-in"></span> Подключиться
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h2>Создать комнату</h2>
+                    <p class="card-hint">Вы станете хостом. Друзья подключатся по вашему адресу.</p>
+                    <div class="address-group">
+                        <div class="address-row">
+                            <span id="my-address" class="address-value">—</span>
+                            <button class="btn btn-secondary" id="copy-address-btn" type="button">Копировать</button>
+                        </div>
+                    </div>
+                    <div class="spacer"></div>
+                    <button class="btn btn-success" id="create-room-btn">
+                        <span data-icon="plus"></span> Создать комнату
+                    </button>
+                </div>
+            </div>
+
+            <div class="room-list" id="room-list">
+                <p class="room-empty">Здесь появятся комнаты, в которых вы уже были.</p>
+            </div>
+        </div>
+        <aside id="lobby-panel" aria-label="Чат сети">
+            <div class="chat-title">
+                <span>Чат сети</span>
+                <span id="lobby-online"></span>
+            </div>
+            <div class="lobby-note">Видят только те, кто в одной сети с вами (Radmin VPN, Hamachi, ZeroTier, домашний Wi-Fi). Сообщения не сохраняются.</div>
+            <div id="lobby-messages"></div>
+            <div id="lobby-status" role="status"></div>
+            <div class="lobby-compose">
+                <textarea id="lobby-input" rows="1" placeholder="Сначала введите своё имя" disabled></textarea>
+                <button class="btn btn-primary" id="lobby-send" type="button" disabled>Отправить</button>
+            </div>
+        </aside>
+        </div>
+    </div>
+
+    <!-- ЭКРАН 2: комната -->
+    <div id="room-screen">
+        <div class="room-header">
+            <h2 id="current-room-name">Комната</h2>
+            <button class="icon-btn active" id="chat-toggle" title="Чат" aria-label="Показать или скрыть чат">
+                <span data-icon="chat"></span>
+                <span class="badge" id="chat-badge"></span>
+            </button>
+        </div>
+        <div class="room-body">
+            <div class="room-main">
+                <div id="reconnect-bar" role="status"></div>
+                <div id="stream-invite">
+                    <span data-icon="monitor" data-size="20"></span>
+                    <span class="grow" id="invite-text"></span>
+                    <button class="btn btn-primary" id="invite-watch" type="button">Смотреть</button>
+                </div>
+                <div id="stream-stage">
+                    <div id="stream-wait">Подключаюсь к трансляции…</div>
+                    <video id="stream-video" autoplay playsinline muted></video>
+                    <audio id="stream-audio" autoplay></audio>
+                    <div class="stream-bar">
+                        <span class="stream-title" id="stream-title"></span>
+                        <span data-icon="volume-2" data-size="18"></span>
+                        <input type="range" id="stream-volume" min="0" max="100" value="100" title="Громкость трансляции">
+                        <button class="chat-tool" id="stream-close" type="button" title="Перестать смотреть" aria-label="Перестать смотреть"></button>
+                        <button class="chat-tool" id="stream-full" type="button" title="Во весь экран" aria-label="Во весь экран"></button>
+                    </div>
+                </div>
+                <div class="participants-list" id="participants-list"></div>
+                <div id="sharing-bar">
+                    <span class="dot"></span>
+                    <span class="grow" id="sharing-text">Вы показываете экран</span>
+                    <div class="seg" id="sharing-quality">
+                        <button type="button" data-q="1080">1080p</button>
+                        <button type="button" data-q="720">720p</button>
+                        <button type="button" data-q="480">480p</button>
+                    </div>
+                    <button class="btn btn-secondary" id="sharing-stop" type="button">Остановить</button>
+                </div>
+                <div id="share-preview">
+                    <video id="share-preview-video" autoplay muted playsinline></video>
+                    <div class="cap"><span id="share-preview-text">Так видят ваш экран</span><button id="share-preview-hide" type="button">Скрыть</button></div>
+                </div>
+                <div class="room-controls">
+                    <button class="control-btn mic-off" id="mic-btn" title="Микрофон"></button>
+                    <button class="control-btn settings" id="camera-btn" title="Включить камеру" aria-label="Включить камеру"></button>
+                    <button class="control-btn settings" id="settings-btn" title="Настройки"></button>
+                    <button class="control-btn settings" id="screen-btn" title="Показать экран" aria-label="Показать экран"></button>
+                    <div id="visualizer-container">
+                        <canvas id="frequency-canvas" width="160" height="36"></canvas>
+                    </div>
+                    <button class="control-btn leave" id="leave-btn"></button>
+                </div>
+            </div>
+            <aside id="chat-panel">
+                <div class="chat-title"><span data-icon="chat" data-size="18"></span> Чат комнаты</div>
+                <div id="chat-messages"></div>
+                <div class="chat-compose">
+                    <div id="emoji-popup"></div>
+                    <div id="chat-attach-preview">
+                        <img id="chat-attach-img" alt="">
+                        <span>Картинка будет отправлена вместе с сообщением</span>
+                        <button class="chat-tool" id="chat-attach-clear" type="button" title="Убрать вложение" aria-label="Убрать вложение"></button>
+                    </div>
+                    <form id="chat-form" autocomplete="off">
+                        <button class="chat-tool" id="chat-attach" type="button" title="Прикрепить картинку или файл" aria-label="Прикрепить картинку или файл"></button>
+                        <button class="chat-tool" id="chat-emoji" type="button" title="Эмодзи" aria-label="Эмодзи"></button>
+                        <input id="chat-input" type="text" maxlength="500" placeholder="Написать сообщение" />
+                        <button id="chat-send" type="submit" title="Отправить" aria-label="Отправить"></button>
+                    </form>
+                    <input type="file" id="chat-file" hidden>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: создание комнаты -->
+    <div class="modal" id="create-modal">
+        <div class="modal-content">
+            <h2>Создать комнату</h2>
+            <div class="input-group">
+                <label>Где создать комнату</label>
+                <select id="room-mode">
+                    <option value="local">На моём компьютере (Radmin / LAN)</option>
+                    <option value="server">На арендованном сервере</option>
+                </select>
+            </div>
+            <div id="server-fields" style="display:none;">
+                <div class="input-group">
+                    <label>Адрес сервера</label>
+                    <input type="text" id="server-address-input" placeholder="Например: 203.0.113.5:8080" autocomplete="off" />
+                </div>
+                <div class="input-group">
+                    <label>Ключ создания (если задан на сервере)</label>
+                    <input type="password" id="server-key-input" autocomplete="off" />
+                </div>
+            </div>
+            <div class="input-group">
+                <label>Название комнаты</label>
+                <input type="text" id="room-name-input" placeholder="Например: Игровая" />
+            </div>
+            <div class="input-group">
+                <label>Пароль (необязательно)</label>
+                <input type="password" id="room-password-input" maxlength="64" placeholder="Оставьте пустым — вход без пароля" autocomplete="off" />
+            </div>
+            <div class="input-group" id="visible-group">
+                <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
+                    <input type="checkbox" id="room-visible" checked />
+                    Показывать комнату другим в вашей сети (Radmin / LAN)
+                </label>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="cancel-create">Отмена</button>
+                <button class="btn btn-primary" id="confirm-create">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: хост выходит из комнаты -->
+    <!-- МОДАЛКА: понятное сообщение об ошибке -->
+    <div class="modal" id="error-modal" role="alertdialog" aria-labelledby="error-title" style="z-index:2000;">
+        <div class="modal-content">
+            <h2 id="error-title"></h2>
+            <p id="error-text" style="color:var(--muted);line-height:1.5;margin:6px 0 12px;"></p>
+            <div id="error-hints-wrap">
+                <div class="source-title">Что можно сделать</div>
+                <ul id="error-hints"></ul>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="error-ok" type="button">Понятно</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="leave-modal">
+        <div class="modal-content">
+            <h2>Выйти из комнаты</h2>
+            <p class="hint" style="margin-bottom: 8px; font-size: 14px;">Вы хозяин этой комнаты. Её можно оставить открытой: остальные продолжат общаться, а вы вернётесь с главного экрана. Комната закроется, когда вы закроете приложение.</p>
+            <div class="modal-buttons" style="flex-wrap: wrap;">
+                <button class="btn btn-secondary" id="leave-cancel" type="button">Отмена</button>
+                <button class="btn btn-secondary" id="leave-close-room" type="button">Закрыть комнату</button>
+                <button class="btn btn-primary" id="leave-keep" type="button">Выйти, комната останется</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: выбор экрана для трансляции -->
+    <div class="modal" id="screen-modal">
+        <div class="modal-content">
+            <h2>Показать экран</h2>
+            <div id="screen-sources"></div>
+            <div class="setting-item">
+                <label>Качество</label>
+                <div class="seg" id="screen-quality">
+                    <button type="button" data-q="1080">1080p</button>
+                    <button type="button" data-q="720">720p</button>
+                    <button type="button" data-q="480">480p</button>
+                </div>
+                <div class="hint" id="screen-quality-hint"></div>
+            </div>
+            <div class="setting-item">
+                <label>Что важнее</label>
+                <div class="seg" id="screen-priority">
+                    <button type="button" data-p="motion">Плавность (игры)</button>
+                    <button type="button" data-p="detail">Чёткость (текст, видео)</button>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label><input type="checkbox" id="screen-audio"> Передавать звук компьютера (например, игры)</label>
+                <div class="hint">Если друзья слышат у себя эхо своего голоса, отключите эту галочку.</div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="screen-cancel" type="button">Отмена</button>
+                <button class="btn btn-primary" id="screen-go" type="button" disabled>Начать трансляцию</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" role="status"></div>
+
+    <!-- МОДАЛКА: настройки голоса -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content settings-wide">
+            <h2>Настройки</h2>
+            <div class="settings-layout">
+                <nav class="settings-nav" id="settings-nav">
+                    <button type="button" data-tab="audio" class="active"><span data-icon="volume-2" data-size="18"></span> Аудио</button>
+                    <button type="button" data-tab="video" ><span data-icon="camera" data-size="18"></span> Видео</button>
+                    <button type="button" data-tab="sounds"><span data-icon="bell" data-size="18"></span> Звуки</button>
+                    <button type="button" data-tab="general"><span data-icon="sliders" data-size="18"></span> Общее</button>
+                </nav>
+                <div class="settings-panes">
+                    <div class="settings-pane active" id="settings-pane-audio">
+                        <div class="setting-item">
+                            <label>Громкость микрофона (Вход) <span class="value" id="input-vol-value">100%</span></label>
+                            <input type="range" id="input-volume" min="0" max="200" value="100">
+                        </div>
+                        <div class="setting-item">
+                            <label>Громкость собеседников (Общая) <span class="value" id="output-vol-value">100%</span></label>
+                            <input type="range" id="output-volume" min="0" max="400" value="100">
+                        </div>
+                        <div class="setting-item" style="display:none">
+                            <label><input type="checkbox" id="noise-suppression" checked> Включить шумоподавление</label>
+                        </div>
+                    </div>
+                    <div class="settings-pane" id="settings-pane-video"></div>
+                    <div class="settings-pane" id="settings-pane-sounds"></div>
+                    <div class="settings-pane" id="settings-pane-general">
+                        <div class="setting-item">
+                            <label><input type="checkbox" id="tray-on-close" checked> Крестик сворачивает в трей (приложение и комната продолжают работать)</label>
+                        </div>
+                        <div class="setting-item" id="theme-setting">
+                            <label>Цветовая схема</label>
+                            <div id="theme-options"></div>
+                            <div id="theme-custom" style="display:none">
+                                <div class="hint" id="theme-warn" style="color:var(--warn);min-height:16px"></div>
+                                <button class="btn btn-secondary" id="theme-reset" type="button"></button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <button class="btn btn-secondary" id="open-diag" type="button">Диагностика…</button>
+                            <div class="hint" style="margin-top:6px">Проверит микрофон, камеру, сеть и связь с участниками.</div>
+                        </div>
+                        <div id="app-version"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="close-settings">Готово</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ДИАГНОСТИКА -->
+    <div class="modal" id="diag-modal">
+        <div class="modal-content">
+            <h2><span id="diag-title-icon"></span> Диагностика</h2>
+            <div class="hint" style="margin-bottom:12px">Проверяю микрофон, камеру, сеть и связь с участниками. Если что-то не работает, здесь будет написано, что делать.</div>
+            <div id="diag-list"></div>
+            <div class="setting-item">
+                <label>Проверить хост по адресу (в комнату не заходит)</label>
+                <div class="diag-host-row">
+                    <input type="text" id="diag-address" placeholder="Адрес (IP:порт)" autocomplete="off">
+                    <button class="btn btn-secondary" id="diag-host" type="button">Проверить</button>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="diag-copy" type="button" disabled>Скопировать отчёт</button>
+                <button class="btn btn-secondary" id="diag-run" type="button">Проверить заново</button>
+                <button class="btn btn-primary" id="diag-close" type="button">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- КОНТЕКСТНОЕ МЕНЮ участника -->
+    <div class="context-menu" id="context-menu">
+        <div class="volume-slider-container">
+            <label>Громкость: <span id="context-volume-value">100%</span></label>
+            <input type="range" id="context-volume-slider" min="0" max="400" value="100">
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" id="context-mute"></div>
+        <div class="context-menu-item danger" id="context-kick"></div>
+    </div>
+
+    <!-- Скрытый <audio> на случай, если пригодится (у нас используется Audio() из JS) -->
+    <audio id="remote-audio" autoplay></audio>
+
+    <div id="lightbox"><img alt=""></div>
+
+    <script src="./dist/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,68 @@
+{
+  "name": "cocall",
+  "productName": "CoCall",
+  "version": "1.0.6",
+  "description": "CoCall — голосовой чат для своих",
+  "main": "dist/main.js",
+  "author": "vovaeiffel",
+  "scripts": {
+    "build:main": "tsc",
+    "build:renderer": "esbuild src/renderer.ts --bundle --outfile=dist/app.js --platform=browser --target=chrome120 --sourcemap",
+    "build": "npm run build:main && npm run build:renderer",
+    "typecheck": "tsc -p tsconfig.renderer.json --noEmit",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "electron": "*",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.cocall.app",
+    "productName": "CoCall",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "index.html",
+      "build/icon.png",
+      "sounds/**/*",
+      "!sounds/*.txt",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "CoCall-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CoCall"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "vovaeiffel",
+        "repo": "CoCall",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
